@@ -1,5 +1,9 @@
 # Loan Default Prediction for Microfinance Institutions in Uganda
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://msc-loan-default-uel-liabsckn4jrdhxzygsvgz5.streamlit.app/)
+
+**Live app:** https://msc-loan-default-uel-liabsckn4jrdhxzygsvgz5.streamlit.app/
+
 Code that goes with the MSc Data Science dissertation:
 
 > **Enhancing Financial Inclusion in Uganda through Data Science: A Study on Predictive Analytics for Loan Default Prediction for Microfinance Institutions.**
@@ -76,7 +80,7 @@ In VS Code, choose `./.env/bin/python` as the interpreter (Cmd+Shift+P → *Pyth
 ---
 
 ### Deploying online
-The app is set up for [Streamlit Community Cloud](https://share.streamlit.io): connect the GitHub repository, choose `app.py` as the main file and **Python 3.12** under *Advanced settings*. Libraries install from [requirements.txt](requirements.txt). The pinned XGBoost 3.4.1 on PyPI needs Python 3.12 or newer.
+The app is deployed on [Streamlit Community Cloud](https://share.streamlit.io) at https://msc-loan-default-uel-liabsckn4jrdhxzygsvgz5.streamlit.app/. To redeploy elsewhere: connect the GitHub repository, choose `app.py` as the main file and **Python 3.12** under *Advanced settings*. Libraries install from [requirements.txt](requirements.txt). The pinned XGBoost 3.4.1 on PyPI needs Python 3.12 or newer.
 
 ## 4. Usage
 
