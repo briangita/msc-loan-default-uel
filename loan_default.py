@@ -7,7 +7,6 @@ Usage:
 import argparse
 
 import pandas as pd
-from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -17,7 +16,7 @@ from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, precisi
                              recall_score, roc_auc_score)
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import MinMaxScaler, OrdinalEncoder
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, OrdinalEncoder
 from xgboost import XGBClassifier
 
 SEED = 42
@@ -43,29 +42,36 @@ def prepare(df, target, positive=None):
 def build_models(X):
     num = X.select_dtypes("number").columns.tolist()
     cat = [c for c in X if c not in num]
+
     # Fitted inside each pipeline, so imputation/scaling/encoding only ever see training data (thesis 3.3).
-    pre = ColumnTransformer([
-        ("num", make_pipeline(SimpleImputer(strategy="median"), MinMaxScaler()), num),
-        ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"),
-                              OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)), cat),
-    ])
+    def pre(encoder):
+        return ColumnTransformer([
+            ("num", make_pipeline(SimpleImputer(strategy="median"), MinMaxScaler()), num),
+            ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), encoder), cat),
+        ])
+
+    def codes():  # integer codes suit trees, which split on them in any order
+        return pre(OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1))
+
     return {
-        "Majority baseline": DummyClassifier(strategy="most_frequent"),
-        "Logistic Regression": LogisticRegression(max_iter=1000, random_state=SEED),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=SEED),
-        "XGBoost": XGBClassifier(eval_metric="logloss", learning_rate=0.1, max_depth=3, n_estimators=100,
-                                 subsample=0.8, colsample_bytree=0.8, random_state=SEED),
-    }, pre
+        "Majority baseline": make_pipeline(codes(), DummyClassifier(strategy="most_frequent")),
+        # One-hot, so LR doesn't treat category codes as a ranking (e.g. retail = 2 x services).
+        "Logistic Regression": make_pipeline(pre(OneHotEncoder(handle_unknown="ignore")),
+                                             LogisticRegression(max_iter=1000, random_state=SEED)),
+        "Random Forest": make_pipeline(codes(), RandomForestClassifier(n_estimators=100, random_state=SEED)),
+        "XGBoost": make_pipeline(codes(), XGBClassifier(eval_metric="logloss", learning_rate=0.1, max_depth=3,
+                                                        n_estimators=100, subsample=0.8, colsample_bytree=0.8,
+                                                        random_state=SEED)),
+    }
 
 
 def evaluate(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=SEED)
-    models, pre = build_models(X)
+    models = build_models(X)
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
     rows, cms = [], {}
     details = {"y_test": y_test, "probs": {}, "models": {}}
-    for name, clf in models.items():
-        model = make_pipeline(clone(pre), clf)
+    for name, model in models.items():
         cv_auc = cross_val_score(model, X_train, y_train, cv=cv, scoring="roc_auc")
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)

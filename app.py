@@ -15,6 +15,7 @@ from loan_default import evaluate, prepare
 THESIS = ("Enhancing Financial Inclusion in Uganda through Data Science: A Study on Predictive Analytics "
           "for Loan Default Prediction for Microfinance Institutions")
 # Categorical slots 1-3 of the reference palette (validated all-pairs); the baseline is a neutral reference.
+MAX_ROWS = 50_000  # ponytail: larger uploads are sampled; the free Cloud instance has ~1 GB RAM
 MODELS = ["Majority baseline", "Logistic Regression", "Random Forest", "XGBoost"]
 COLORS = ["#9a9893", "#2a78d6", "#eb6834", "#1baf7a"]
 MODEL_COLOR = alt.Color("Model:N", scale=alt.Scale(domain=MODELS, range=COLORS), legend=alt.Legend(orient="bottom"))
@@ -65,6 +66,10 @@ with st.sidebar:
         target = st.selectbox("Target column (did the loan default?)", df.columns, index=list(df.columns).index(guess))
     else:
         df, target = pd.read_csv("german_credit.csv"), "class"
+
+    if len(df) > MAX_ROWS:
+        st.warning(f"Using a random sample of {MAX_ROWS:,} of the {len(df):,} rows to keep training fast.")
+        df = df.sample(MAX_ROWS, random_state=42)
 
     values = df[target].dropna().unique()
     if len(values) != 2:

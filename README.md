@@ -153,7 +153,7 @@ Follows the dissertation's feature set (Table 1, §4.2):
 - **`repayment_interval`**: mapped to monthly=1, irregular=2, bullet=3, the ordinal risk scale from §4.2.2.
 - **ID-like columns** (every value unique, excluding decimal columns such as income) are dropped. Free text such as Kiva's `loan_use` is not modelled.
 - **Numeric columns**: median imputation, then min-max scaling (§3.3).
-- **Categorical columns**: most-frequent imputation, then integer codes. This is the equivalent of the dissertation's `cat.codes` (§4.2.3), but categories not seen in training are handled safely.
+- **Categorical columns**: most-frequent imputation, then encoding that depends on the model. The tree models (and the baseline) get integer codes, the equivalent of the dissertation's `cat.codes` (§4.2.3); trees can split on codes in any order. Logistic Regression gets one-hot columns instead, because integer codes would make it treat categories as a ranking (e.g. retail = 2 × services). This departs from the dissertation, which used codes for every model. Both encoders handle categories not seen in training safely.
 - All preprocessing sits **inside a scikit-learn `Pipeline`**. It is fitted on the training fold only and then applied to held-out data, which prevents the leakage that §3.3 warns about.
 
 ### 5.3 Models (§4.4)
@@ -187,31 +187,31 @@ Precision, recall and F1 use the default 0.5 probability threshold. A lender wou
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC | CV ROC-AUC |
 |---|---|---|---|---|---|---|
 | Majority baseline | 0.780 | 0.000 | 0.000 | 0.000 | 0.500 | 0.500 ± 0.000 |
-| Logistic Regression | 0.785 | 0.526 | 0.227 | 0.317 | 0.772 | 0.812 ± 0.051 |
+| Logistic Regression | 0.810 | 0.625 | 0.341 | 0.441 | 0.821 | 0.835 ± 0.042 |
 | Random Forest | 0.790 | 0.531 | 0.386 | 0.447 | 0.780 | 0.812 ± 0.058 |
 | XGBoost | 0.780 | 0.500 | 0.318 | 0.389 | 0.788 | 0.815 ± 0.052 |
 
 ### 6.2 Synthetic data with random labels (`generated_loans_random.csv`, 23.3% default realised from a 22% draw)
 | Model | ROC-AUC (test) | CV ROC-AUC |
 |---|---|---|
-| Logistic Regression | 0.456 | 0.506 ± 0.043 |
+| Logistic Regression | 0.575 | 0.498 ± 0.028 |
 | Random Forest | 0.605 | 0.476 ± 0.059 |
 | XGBoost | 0.539 | 0.502 ± 0.059 |
 
-Every model is at chance under cross-validation. The single test-split AUC of 0.605 for Random Forest is sampling noise on 200 rows, which is exactly why §5.2 warns against relying on one split.
+Every model is at chance under cross-validation. The single test-split AUCs of 0.605 (Random Forest) and 0.575 (Logistic Regression) are sampling noise on 200 rows, which is exactly why §5.2 warns against relying on one split.
 
 ### 6.3 Real outcomes: UCI German Credit (1,000 loans, 30% bad)
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC | CV ROC-AUC |
 |---|---|---|---|---|---|---|
 | Majority baseline | 0.700 | 0.000 | 0.000 | 0.000 | 0.500 | 0.500 ± 0.000 |
-| Logistic Regression | 0.760 | 0.620 | 0.517 | 0.564 | 0.786 | 0.781 ± 0.058 |
+| Logistic Regression | 0.770 | 0.640 | 0.533 | 0.582 | 0.801 | 0.772 ± 0.055 |
 | Random Forest | 0.760 | 0.658 | 0.417 | 0.510 | 0.798 | 0.794 ± 0.044 |
 | XGBoost | 0.790 | 0.688 | 0.550 | 0.611 | 0.813 | 0.798 ± 0.037 |
 
 ### 6.4 Interpretation
-- **The perfect Random Forest score in Table 2 is not reproduced.** When the label contains realistic noise, Random Forest reaches an AUC of about 0.78, not 1.000. A perfect held-out score only happens if the label is an exact function of the features, or if information about the label leaks into the inputs. Both are possibilities the dissertation names in §4.5.2.
-- **The ranking of the models only partly matches the dissertation.** The dissertation ranks Random Forest first, then XGBoost, then Logistic Regression. Here, on both datasets with learnable labels (6.1 and 6.3), XGBoost ≥ Random Forest ≥ Logistic Regression on test AUC. The two agree only that the tree ensembles edge out Logistic Regression, and those gaps are small compared with the cross-validation spread.
-- **Accuracy is a misleading measure here.** On the synthetic data, accuracy is about 0.78 for every model, *including* the baseline that never predicts a default. Recall and AUC are the measures that show whether a model is useful.
+- **The perfect Random Forest score in Table 2 is not reproduced.** When the label contains realistic noise, Random Forest reaches an AUC of 0.780, not 1.000. A perfect held-out score only happens if the label is an exact function of the features, or if information about the label leaks into the inputs. Both are possibilities the dissertation names in §4.5.2.
+- **The ranking of the models does not match the dissertation.** The dissertation ranks Random Forest first, then XGBoost, then Logistic Regression. Here Logistic Regression is best on the rule-based data (6.1). That is expected, because the rule is an additive logistic score, which is exactly the shape Logistic Regression fits. On German Credit (6.3), XGBoost is narrowly ahead of Logistic Regression and Random Forest. All of these gaps are small compared with the cross-validation spread, so no model is clearly best.
+- **Accuracy is a misleading measure here.** On the synthetic data, accuracy is 0.78–0.81 for every model, *including* 0.78 for the baseline that never predicts a default. Recall and AUC are the measures that show whether a model is useful.
 - **The German Credit run is the strongest evidence in this repository.** It shows that the same pipeline works on loans with *observed* repayment outcomes and beats the baseline there. It is still not Ugandan MFI data.
 
 ---
