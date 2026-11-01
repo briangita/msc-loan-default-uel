@@ -35,8 +35,8 @@ def prepare(df, target, positive=None):
     X = df.drop(columns=[target])
     if "repayment_interval" in X:
         X["repayment_interval"] = X["repayment_interval"].str.lower().map(REPAYMENT_ORDER)
-    # ponytail: drops ID-like columns (all values unique); free text such as loan_use needs NLP, not ordinal codes
-    X = X.drop(columns=[c for c in X if X[c].nunique() == len(X)])
+    # ponytail: drops ID-like columns (all values unique, not decimals); free text such as loan_use needs NLP, not ordinal codes
+    X = X.drop(columns=[c for c in X if X[c].nunique() == len(X) and X[c].dtype.kind != "f"])
     return X, y, positive
 
 

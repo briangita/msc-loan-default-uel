@@ -89,10 +89,11 @@ The app is deployed on [Streamlit Community Cloud](https://share.streamlit.io) a
 ./.env/bin/streamlit run app.py        # opens http://localhost:8501
 ```
 In the sidebar, choose to generate synthetic loans (size, label mode, seed), upload your own CSV and pick its target column and "defaulted" value, or load the German Credit sample. Then press **Train and evaluate models**. The results page shows:
+- a decision-threshold slider that updates precision, recall, F1, accuracy and the confusion matrices;
 - the metrics table and a grouped bar chart of the test-set metrics;
 - ROC curves and precision–recall curves for the three models;
 - feature importance for Random Forest and XGBoost;
-- the distribution of XGBoost's predicted default probabilities for repaid and defaulted loans, with the 0.5 cut-off;
+- the distribution of XGBoost's predicted default probabilities for repaid and defaulted loans, with the chosen cut-off;
 - a confusion-matrix heatmap for each model.
 
 ### Generate data
@@ -150,7 +151,7 @@ Follows the dissertation's feature set (Table 1, §4.2):
 ### 5.2 Preprocessing (`loan_default.py → prepare`, `build_models`)
 - **Target**: converted to 0/1 using `--positive`.
 - **`repayment_interval`**: mapped to monthly=1, irregular=2, bullet=3, the ordinal risk scale from §4.2.2.
-- **ID-like columns** (every value unique) are dropped. Free text such as Kiva's `loan_use` is not modelled.
+- **ID-like columns** (every value unique, excluding decimal columns such as income) are dropped. Free text such as Kiva's `loan_use` is not modelled.
 - **Numeric columns**: median imputation, then min-max scaling (§3.3).
 - **Categorical columns**: most-frequent imputation, then integer codes. This is the equivalent of the dissertation's `cat.codes` (§4.2.3), but categories not seen in training are handled safely.
 - All preprocessing sits **inside a scikit-learn `Pipeline`**. It is fitted on the training fold only and then applied to held-out data, which prevents the leakage that §3.3 warns about.
@@ -176,7 +177,7 @@ The dissertation's `use_label_encoder=False` is left out because current XGBoost
 - **5-fold stratified cross-validated ROC-AUC** on the training set, reported as mean ± SD (§3.1, §3.5).
 - **Confusion matrix** for each model (TN, FP, FN, TP), as recommended in §4.5.2.
 
-Precision, recall and F1 use the default 0.5 probability threshold. A lender would choose a threshold based on what false approvals and false rejections cost (§2.3, §3.5). That step is not implemented here.
+Precision, recall and F1 use the default 0.5 probability threshold. A lender would choose a threshold based on what false approvals and false rejections cost (§2.3, §3.5). The web app has a threshold slider to explore this trade-off, but no cost-based threshold is chosen automatically.
 
 ---
 
@@ -219,7 +220,7 @@ Every model is at chance under cross-validation. The single test-split AUC of 0.
 
 - **No Ugandan repayment outcomes.** The synthetic labels show only that the pipeline can learn a rule we wrote ourselves. Validation needs loan-level MFI records with origination dates, due dates, repayment events and a written definition of default (§5.3).
 - **Small samples and one split.** With 1,000 rows, test metrics vary by several points from one split to the next. Cross-validation reduces the problem but does not remove it.
-- **No calibration or cost-based threshold.** Predicted probabilities are not calibrated, and the 0.5 threshold ignores what each type of error costs a lender.
+- **No calibration or cost-based threshold.** Predicted probabilities are not calibrated, and the 0.5 threshold ignores what each type of error costs a lender. The app's slider lets you move it by hand.
 - **Not yet implemented** from the dissertation's methodology: hyperparameter grid search, SHAP explanations, fairness analysis by gender, sector or country, and NLP on `loan_use`.
 - **Fairness.** `borrower_genders` is used as a feature. Any real deployment needs a proxy-discrimination audit, human oversight and a way for applicants to appeal (§3.5, §5.2).
 

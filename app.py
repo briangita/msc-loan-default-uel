@@ -6,7 +6,8 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.metrics import precision_recall_curve, roc_curve
+from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, precision_recall_curve, precision_score,
+                             recall_score, roc_curve)
 
 from generate_data import make_dataset
 from loan_default import evaluate, prepare
@@ -88,7 +89,9 @@ st.download_button("Download this dataset (CSV)", df.to_csv(index=False), "loans
 
 # --- 3. Train and evaluate ----------------------------------------------------
 st.subheader("Model results")
-if not st.button("Train and evaluate models", type="primary"):
+if st.button("Train and evaluate models", type="primary"):
+    st.session_state.trained = True  # keep results on screen when the threshold slider reruns the page
+if not st.session_state.get("trained"):
     st.caption("Uses an 80/20 stratified train/test split and 5-fold cross-validation on the training set.")
     st.stop()
 
@@ -100,6 +103,17 @@ except ValueError as e:  # e.g. too few defaults for stratified 5-fold CV
     st.stop()
 
 st.caption(f"Features used: {', '.join(features)} · Test set: {len(y_test)} loans, {int(y_test.sum())} defaults")
+threshold = st.slider("Decision threshold: flag a loan as a likely default when its predicted probability is above",
+                      0.05, 0.95, 0.5, 0.05,
+                      help="Lower it to catch more defaults at the cost of flagging more good loans. "
+                           "ROC-AUC does not depend on the threshold.")
+for name, p in probs.items():
+    pred = (p > threshold).astype(int)
+    results.loc[name, ["Accuracy", "Precision", "Recall", "F1 Score"]] = [
+        accuracy_score(y_test, pred), precision_score(y_test, pred, zero_division=0),
+        recall_score(y_test, pred), f1_score(y_test, pred)]
+    cms[name] = confusion_matrix(y_test, pred, labels=[0, 1])
+results = results.round(3)
 st.dataframe(results, width="stretch")
 
 # Metric comparison
@@ -169,7 +183,7 @@ for col, (name, imp) in zip(st.columns(2), importances.items()):
 # Predicted probability distribution
 st.markdown("**XGBoost predicted default probability, by actual outcome**  \n"
             "<small>Good separation means repaid loans cluster near 0 and defaults near 1. "
-            "The 0.5 line is the cut-off behind the precision and recall figures.</small>", unsafe_allow_html=True)
+            f"The dashed line is the {threshold:.2f} threshold behind the precision and recall figures.</small>", unsafe_allow_html=True)
 dist = pd.DataFrame({"Predicted probability of default": probs["XGBoost"],
                      "Actual outcome": np.where(y_test == 1, "Defaulted", "Repaid")})
 hist = alt.Chart().mark_bar(color=COLORS[3], cornerRadiusTopLeft=2, cornerRadiusTopRight=2).encode(
@@ -178,7 +192,7 @@ hist = alt.Chart().mark_bar(color=COLORS[3], cornerRadiusTopLeft=2, cornerRadius
     tooltip=[alt.Tooltip("Predicted probability of default:Q", bin=alt.Bin(extent=[0, 1], step=0.05)),
              alt.Tooltip("count():Q", title="Loans")],
 ).properties(height=180)
-cut = alt.Chart().mark_rule(strokeDash=[4, 4], color="#52514e").encode(x=alt.datum(0.5))
+cut = alt.Chart().mark_rule(strokeDash=[4, 4], color="#52514e").encode(x=alt.datum(threshold))
 st.altair_chart(alt.layer(hist, cut, data=dist).facet(
     row=alt.Row("Actual outcome:N", sort=["Repaid", "Defaulted"], title=None)).resolve_scale(y="independent"),
     width="stretch")
@@ -211,6 +225,8 @@ with st.expander("How to read these results"):
         "- **ROC-AUC**: how well the model ranks defaulters above non-defaulters. 0.5 = chance, 1.0 = perfect.\n"
         "- **Accuracy** can look high even for the baseline that never predicts a default, so compare against it.\n"
         "- **Recall**: share of real defaults caught. **Precision**: share of flagged loans that really defaulted.\n"
+        "- **Threshold**: lowering it raises recall and lowers precision. A lender picks it from what a missed "
+        "default costs compared with turning away a good borrower.\n"
         "- **CV ROC-AUC**: average ± spread over 5 folds, more stable than a single test split.\n"
         "- **Feature importance** shows what the models rely on, not what causes default.\n"
         "- With random labels, every model should score about 0.5. If not, something is leaking."
